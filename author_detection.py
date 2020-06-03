@@ -125,11 +125,23 @@ print("1-gram: "+str(elapsed_time))
 start_time = time.time()
 
 for author, docs in docList.items():
-    wordBoundaries = map(lambda char: dict([[(docs['all_tokens'][char], docs['all_tokens'][char-1]),1]]), range(len(docs['all_tokens'])))
-    wordBoundaries = reduce(reducer, wordBoundaries)
-    wordBoundaries.update((k, v/docList[author]['TF'][k[1]]) for k,v in wordBoundaries.items())
-    docList[author]['2-gram'] = wordBoundaries
+    bifreq = map(lambda char: dict([[(docs['all_tokens'][char], docs['all_tokens'][char-1]),1]]), range(len(docs['all_tokens'])))
+    bifreq = reduce(reducer, bifreq)
+    docList[author]['2TF'] = bifreq
+    docList[author]['2-gram'] = dict()
+    docList[author]['2-gram'].update((k, v/docList[author]['TF'][k[1]]) for k,v in docList[author]['2TF'].items())
 
 elapsed_time = time.time() - start_time
 print("2-gram: "+str(elapsed_time))
 
+# 3-GRAM MODEL
+start_time = time.time()
+
+for author, docs in docList.items():
+    trigram = map(lambda char: dict([[(docs['all_tokens'][char], (docs['all_tokens'][char-1], docs['all_tokens'][char-2])),1]]), range(len(docs['all_tokens'])))
+    trigram = reduce(reducer, trigram)
+    trigram.update((k, v/docList[author]['2TF'][k[1]]) for k,v in trigram.items())
+    docList[author]['2-gram'] = trigram
+
+elapsed_time = time.time() - start_time
+print("3-gram: "+str(elapsed_time))
