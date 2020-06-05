@@ -11,7 +11,7 @@ mytextzip = ''
 docList={}
 # {author:{doc_id:text}}
 idx_ID=1
-author=0
+author = 0
 docList[str(author)] = {}
 with zipfile.ZipFile('30Columnists.zip') as z:
     for zipinfo in z.infolist():
@@ -31,6 +31,21 @@ with zipfile.ZipFile('30Columnists.zip') as z:
                         docList[str(author)] = {}
                 idx_ID+=1
           
+
+def testDataSplit(wholeData,testCount):
+    # testCount = test count for each class
+    test_y = []
+    test_x = []
+    for author , docs in wholeData.items():
+        docCount = len(docs)
+        for i in range(testCount):
+            randomID = str(random.randint(int(list(docs.keys())[0]),int(list(docs.keys())[-1])))
+            test_y.append(author)
+            test_x.append(docs[randomID]['text'])
+    return test_x, test_y
+
+testX, testY = testDataSplit(docList,5)
+
 # TOKENIZATION
 
 # Non-breaking to normal space
@@ -68,11 +83,20 @@ REGEXES = [
     ONE_SPACE
 ]
 
-def pre_porcess_tokenize_sentence(sentence):
-    sentence = sentence.lower()
+def normalize(text):
+    text = text.lower()
     for regexp, subsitution in REGEXES:
-        sentence = regexp.sub(subsitution, sentence)
-    return sentence
+        text = regexp.sub(subsitution, text)
+    return text
+
+def tokenizer(text):
+    normalizedText = normalize(text)
+    tokens = normalizedText.split('-d-')
+    tokens = "</s> <s>".join(tokens)
+    tokens = tokens.split(' ')
+    tokens[0] = "<s>"
+    tokens[len(tokens)-1] = "</s>"
+    return tokens
 
 
 start_time = time.time()
@@ -81,12 +105,7 @@ for author, docs in docList.items():
     docList[author]['all_tokens'] = []
     for key,value in docs.items():
         if key != 'all_tokens':
-            tokenizedText = pre_porcess_tokenize_sentence(value['text'])
-            tokens = tokenizedText.split('-d-')
-            tokens = "</s> <s>".join(tokens)
-            tokens = tokens.split(' ')
-            tokens[0] = "<s>"
-            tokens[len(tokens)-1] = "</s>"
+            tokens = tokenizer(value['text'])
             docList[author][key]['tokens'] = tokens
             docList[author]['all_tokens'].extend(tokens)
     
@@ -141,7 +160,71 @@ for author, docs in docList.items():
     trigram = map(lambda char: dict([[(docs['all_tokens'][char], (docs['all_tokens'][char-1], docs['all_tokens'][char-2])),1]]), range(len(docs['all_tokens'])))
     trigram = reduce(reducer, trigram)
     trigram.update((k, v/docList[author]['2TF'][k[1]]) for k,v in trigram.items())
-    docList[author]['2-gram'] = trigram
+    docList[author]['3-gram'] = trigram
 
 elapsed_time = time.time() - start_time
 print("3-gram: "+str(elapsed_time))
+
+"""
+f = open("newFile.txt",'a')
+for key,value in docList['0']['1-gram'].items():
+    f.write("{0} => {1} \n".format(key,value))    
+f.close()
+"""
+
+def classifier1gram(doc):
+    tokens = tokenizer(doc)
+    probs = [1 for i in docList.keys()]
+    probs2 = [1 for i in docList.keys()]
+    for author , properties in docList.items():
+        sentenceProbs = [1]
+        for token in tokens:
+            if token in properties['1-gram'].keys():
+                sentenceProbs[-1] *= properties['1-gram'][token]
+            if token == '</s>':
+                sentenceProbs.append(1)
+        probs2[int(author)] = sum(sentenceProbs)
+        probs[int(author)] = reduce((lambda x, y: x * y), sentenceProbs) 
+    maxVal = max(probs2)
+    return probs2.index(maxVal)
+
+def classifier2gram(doc):
+    tokens = tokenizer(doc)
+    probs = [1 for i in docList.keys()]
+    probs2 = [1 for i in docList.keys()]
+    boundaries = list(map(lambda char: tuple([tokens[char], tokens[char-1]]), range(len(tokens))))
+    for author , properties in docList.items():
+        sentenceProbs = [1]
+        for boundary in boundaries:
+            if boundary in properties['2-gram'].keys():
+                sentenceProbs[-1] *= properties['2-gram'][boundary]
+            if boundary[0] == '</s>':
+                sentenceProbs.append(1)
+        probs2[int(author)] = sum(sentenceProbs)
+        probs[int(author)] = reduce((lambda x, y: x * y), sentenceProbs) 
+    maxVal = max(probs)
+    return probs.index(maxVal)
+
+def classifier3gram(doc):
+    tokens = tokenizer(doc)
+    probs = [1 for i in docList.keys()]
+    probs2 = [1 for i in docList.keys()]
+    boundaries = list(map(lambda char: tuple([tokens[char], (tokens[char-1],tokens[char-2])]), range(len(tokens))))
+    for author , properties in docList.items():
+        sentenceProbs = [1]
+        for boundary in boundaries:
+            if boundary in properties['3-gram'].keys():
+                sentenceProbs[-1] *= properties['3-gram'][boundary]
+            if boundary[0] == '</s>':
+                sentenceProbs.append(1)
+        probs2[int(author)] = sum(sentenceProbs)
+        probs[int(author)] = reduce((lambda x, y: x * y), sentenceProbs) 
+    
+    maxVal = max(probs)
+    return probs.index(maxVal)
+    
+
+a = classifier1gram(testX[0])
+b = classifier2gram(testX[0])
+c = classifier3gram(testX[0])
+print(a,b,c)
