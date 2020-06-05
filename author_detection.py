@@ -7,6 +7,9 @@ import math
 import time
 from functools import reduce
 
+#Only for statistical report and data splitting
+from sklearn.metrics import *
+
 mytextzip = ''
 docList={}
 # {author:{doc_id:text}}
@@ -36,10 +39,14 @@ def testDataSplit(wholeData,testCount):
     # testCount = test count for each class
     test_y = []
     test_x = []
+    ids= []
     for author , docs in wholeData.items():
         docCount = len(docs)
         for i in range(testCount):
             randomID = str(random.randint(int(list(docs.keys())[0]),int(list(docs.keys())[-1])))
+            while randomID in ids:
+                randomID = str(random.randint(int(list(docs.keys())[0]),int(list(docs.keys())[-1])))
+            ids.append(randomID)
             test_y.append(author)
             test_x.append(docs[randomID]['text'])
     return test_x, test_y
@@ -174,57 +181,109 @@ f.close()
 
 def classifier1gram(doc):
     tokens = tokenizer(doc)
-    probs = [1 for i in docList.keys()]
-    probs2 = [1 for i in docList.keys()]
+    probs = [0 for i in docList.keys()]
     for author , properties in docList.items():
-        sentenceProbs = [1]
         for token in tokens:
             if token in properties['1-gram'].keys():
-                sentenceProbs[-1] *= properties['1-gram'][token]
-            if token == '</s>':
-                sentenceProbs.append(1)
-        probs2[int(author)] = sum(sentenceProbs)
-        probs[int(author)] = reduce((lambda x, y: x * y), sentenceProbs) 
-    maxVal = max(probs2)
-    return probs2.index(maxVal)
+                probs[int(author)] += math.log(1/properties['1-gram'][token])
+    minVal = min(probs)
+    return probs.index(minVal)
 
 def classifier2gram(doc):
     tokens = tokenizer(doc)
     probs = [1 for i in docList.keys()]
-    probs2 = [1 for i in docList.keys()]
     boundaries = list(map(lambda char: tuple([tokens[char], tokens[char-1]]), range(len(tokens))))
     for author , properties in docList.items():
-        sentenceProbs = [1]
         for boundary in boundaries:
             if boundary in properties['2-gram'].keys():
-                sentenceProbs[-1] *= properties['2-gram'][boundary]
-            if boundary[0] == '</s>':
-                sentenceProbs.append(1)
-        probs2[int(author)] = sum(sentenceProbs)
-        probs[int(author)] = reduce((lambda x, y: x * y), sentenceProbs) 
+                probs[int(author)] *= properties['2-gram'][boundary]
     maxVal = max(probs)
     return probs.index(maxVal)
 
 def classifier3gram(doc):
     tokens = tokenizer(doc)
     probs = [1 for i in docList.keys()]
-    probs2 = [1 for i in docList.keys()]
     boundaries = list(map(lambda char: tuple([tokens[char], (tokens[char-1],tokens[char-2])]), range(len(tokens))))
     for author , properties in docList.items():
-        sentenceProbs = [1]
         for boundary in boundaries:
             if boundary in properties['3-gram'].keys():
-                sentenceProbs[-1] *= properties['3-gram'][boundary]
-            if boundary[0] == '</s>':
-                sentenceProbs.append(1)
-        probs2[int(author)] = sum(sentenceProbs)
-        probs[int(author)] = reduce((lambda x, y: x * y), sentenceProbs) 
-    
+                probs[int(author)] *= properties['3-gram'][boundary]
     maxVal = max(probs)
     return probs.index(maxVal)
     
 
-a = classifier1gram(testX[0])
-b = classifier2gram(testX[0])
-c = classifier3gram(testX[0])
-print(a,b,c)
+
+predY_1gram=[]
+predY_2gram=[]
+predY_3gram=[]
+for j in range(0,len(testX)):
+  start_time = time.time()
+  predY_1gram.append(classifier1gram(testX[j]))
+  elapsed_time = time.time() - start_time
+  print("Classifier: {0} \n Elapsed Time: {1} \n Result: {2}".format('1-Gram',elapsed_time,predY_1gram[-1]))
+  start_time = time.time()
+  predY_2gram.append(classifier2gram(testX[0]))
+  elapsed_time = time.time() - start_time
+  print("Classifier: {0} \n Elapsed Time: {1} \n Result: {2}".format('2-Gram',elapsed_time,predY_2gram[-1]))
+  start_time = time.time()
+  predY_3gram.append(classifier3gram(testX[0]))
+  elapsed_time = time.time() - start_time
+  print("Classifier: {0} \n Elapsed Time: {1} \n Result: {2}".format('3-Gram',elapsed_time,predY_3gram[-1]))
+
+
+conf_matrix_1gram=confusion_matrix(testY, predY_1gram)
+conf_matrix_2gram=confusion_matrix(testY, predY_2gram)
+conf_matrix_3gram=confusion_matrix(testY, predY_3gram)
+
+
+classes = [i for i in range(1,31)]
+
+# 1-gram confusion matrix
+print("\t",end='')
+for label in classes:
+    print("{:<4}".format(label),end='')
+label=0
+print()
+for idx in conf_matrix_1gram:
+    print("{:<4}".format(classes[label]),end='')
+    for i in range(len(classes)):
+        print("{:<4}".format(idx[i]),end='')
+    label+=1
+    print()
+
+accurarcy=accuracy_score(testY, predY_1gram)
+print(accurarcy)
+
+# 2-gram confusion matrix
+
+print("\t",end='')
+for label in classes:
+    print("{:<4}".format(label),end='')
+label=0
+print()
+for idx in conf_matrix_2gram:
+    print("{:<4}".format(classes[label]),end='')
+    for i in range(len(classes)):
+        print("{:<4}".format(idx[i]),end='')
+    label+=1
+    print()
+
+accurarcy=accuracy_score(testY, predY_2gram)
+print(accurarcy)
+
+# 3-gram confusion matrix
+
+print("\t",end='')
+for label in classes:
+    print("{:<4}".format(label),end='')
+label=0
+print()
+for idx in conf_matrix_2gram:
+    print("{:<4}".format(classes[label]),end='')
+    for i in range(len(classes)):
+        print("{:<4}".format(idx[i]),end='')
+    label+=1
+    print()
+
+accurarcy=accuracy_score(testY, predY_3gram)
+print(accurarcy)
